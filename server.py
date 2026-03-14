@@ -12,6 +12,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 NEW_API_URL = "http://localhost:3000/v1"
 
 def inject_time(messages: list) -> list:
@@ -26,17 +27,26 @@ def inject_time(messages: list) -> list:
         messages.insert(0, {"role": "system", "content": time_info})
     return messages
 
+# 新增 models 接口
+@app.get("/v1/models")
+async def models(request: Request):
+    auth = request.headers.get("authorization", "")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{NEW_API_URL}/models",
+            headers={"Authorization": auth}
+        )
+    return JSONResponse(content=resp.json())
+
 @app.post("/v1/chat/completions")
 async def proxy(request: Request):
     body = await request.json()
     auth = request.headers.get("authorization", "")
     
-    # 注入信息
     body["messages"] = inject_time(body.get("messages", []))
     
     is_stream = body.get("stream", False)
     
-    # 流式响应
     if is_stream:
         async def stream_generator():
             async with httpx.AsyncClient(timeout=120) as client:
@@ -56,8 +66,6 @@ async def proxy(request: Request):
             stream_generator(),
             media_type="text/event-stream"
         )
-    
-    # 非流式响应
     else:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
