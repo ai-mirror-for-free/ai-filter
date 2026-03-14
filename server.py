@@ -27,15 +27,20 @@ def inject_time(messages: list) -> list:
         messages.insert(0, {"role": "system", "content": time_info})
     return messages
 
-# 新增 models 接口
 @app.get("/v1/models")
 async def models(request: Request):
     auth = request.headers.get("authorization", "")
+    
+    # 临时调试：打印收到的 headers
+    print(f"收到的 Authorization: {auth}")
+    
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
             f"{NEW_API_URL}/models",
             headers={"Authorization": auth}
         )
+    
+    print(f"New API 返回: {resp.status_code} {resp.text[:200]}")
     return JSONResponse(content=resp.json())
 
 @app.post("/v1/chat/completions")
