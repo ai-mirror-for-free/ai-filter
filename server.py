@@ -5,6 +5,7 @@ from datetime import datetime
 import httpx
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -82,3 +83,8 @@ async def proxy(request: Request):
                 }
             )
         return JSONResponse(content=resp.json())
+    
+if __name__ == "__main__":
+    import uvicorn
+    print("启动代理服务...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
