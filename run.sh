@@ -4,5 +4,5 @@
 source /root/miniforge3/bin/activate
 conda activate ai
 
-cd /root/ai-filter/ai-filter
+cd /root/ai-filter
 uvicorn server:app --host 0.0.0.0 --port 3300
