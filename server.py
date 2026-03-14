@@ -1,39 +1,64 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse, JSONResponse
 from datetime import datetime
 import httpx
-import json
 
 app = FastAPI()
 
-NEW_API_URL = "http://localhost:3000/v1"  # New API 地址
+NEW_API_URL = "http://你的NewAPI地址/v1"
 
-@app.post("/v1/chat/completions")
-async def proxy(request: Request):
-    body = await request.json()
-    headers = dict(request.headers)
-    
-    # 注入时间信息
-    time_info = f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S %A')}"
-    
-    messages = body.get("messages", [])
-    
-    # 检查是否已有 system 消息
+def inject_time(messages: list) -> list:
+    now = datetime.now()
+    time_info = (
+        f"当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}，"
+        f"{['周一','周二','周三','周四','周五','周六','周日'][now.weekday()]}"
+    )
     if messages and messages[0]["role"] == "system":
         messages[0]["content"] += f"\n{time_info}"
     else:
         messages.insert(0, {"role": "system", "content": time_info})
+    return messages
+
+@app.post("/v1/chat/completions")
+async def proxy(request: Request):
+    body = await request.json()
+    auth = request.headers.get("authorization", "")
     
-    body["messages"] = messages
+    # 注入信息
+    body["messages"] = inject_time(body.get("messages", []))
     
-    # 转发到 New API（保留原始 key）
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            f"{NEW_API_URL}/chat/completions",
-            json=body,
-            headers={
-                "Authorization": headers.get("authorization", ""),
-                "Content-Type": "application/json"
-            }
+    is_stream = body.get("stream", False)
+    
+    # 流式响应
+    if is_stream:
+        async def stream_generator():
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream(
+                    "POST",
+                    f"{NEW_API_URL}/chat/completions",
+                    json=body,
+                    headers={
+                        "Authorization": auth,
+                        "Content-Type": "application/json"
+                    }
+                ) as resp:
+                    async for chunk in resp.aiter_bytes():
+                        yield chunk
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="text/event-stream"
         )
     
-    return resp.json()
+    # 非流式响应
+    else:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{NEW_API_URL}/chat/completions",
+                json=body,
+                headers={
+                    "Authorization": auth,
+                    "Content-Type": "application/json"
+                }
+            )
+        return JSONResponse(content=resp.json())
