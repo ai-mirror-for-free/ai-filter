@@ -14,7 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-NEW_API_URL = "http://localhost:3000/v1"
+NEW_API_URL = "http://localhost:25142/v1"
 
 def inject_time(messages: list) -> list:
     now = datetime.now()
