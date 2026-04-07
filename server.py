@@ -16,6 +16,8 @@ app.add_middleware(
 )
 
 NEW_API_URL = "http://localhost:25142/v1"
+DASHSCOPE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DASHSCOPE_API_KEY = "sk-3354520e3ee7422ea4cc01de7dc3b7e4"
 
 _INJECTION_MARKER = "<!-- __time_injected__ -->"
 
@@ -26,7 +28,6 @@ def inject_time(messages: list) -> list:
         f"当前时间：{now.strftime('%Y-%m-%d %H:%M:%S')}，"
         f"{['周一','周二','周三','周四','周五','周六','周日'][now.weekday()]}"
     )
-    # 深拷贝，避免修改原列表
     messages = copy.deepcopy(messages)
     if messages and messages[0]["role"] == "system":
         messages[0]["content"] = time_info + "\n" + messages[0]["content"]
@@ -47,10 +48,26 @@ async def models(request: Request):
             headers=headers,
         )
     if resp.status_code != 200:
-        return JSONResponse(
-            content=resp.json(),
-            status_code=resp.status_code,
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    return JSONResponse(content=resp.json())
+
+
+@app.post("/v1/embeddings")
+async def embeddings(request: Request):
+    """转发 embedding 请求到 DashScope"""
+    body = await request.json()
+    headers = {
+        "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{DASHSCOPE_URL}/embeddings",
+            json=body,
+            headers=headers,
         )
+    if resp.status_code != 200:
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
     return JSONResponse(content=resp.json())
 
 
@@ -114,10 +131,7 @@ async def proxy(request: Request):
                 headers=headers,
             )
         if resp.status_code != 200:
-            return JSONResponse(
-                content=resp.json(),
-                status_code=resp.status_code,
-            )
+            return JSONResponse(content=resp.json(), status_code=resp.status_code)
         return JSONResponse(content=resp.json())
 
 
